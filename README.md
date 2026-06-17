@@ -7,7 +7,7 @@ testing** on Univention Corporate Server.
 |---|---|
 | Module ID | `authin` |
 | Debian package | `univention-management-console-module-authin` |
-| Category | System |
+| Category | Users (UMC tile group) |
 | License | AGPL-3.0-only |
 
 ## Documentation

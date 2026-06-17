@@ -92,8 +92,8 @@ A dedicated UI panel (not mixed with end-user self-service):
 
 ## Access control
 
-- Module visible only to principals granted `authin/*` via UMC policy (installed
-  for `default-umc-all` → typically Domain Admins).
+- Module visible only to members of the **Administrators** group via UMC policy
+  `authin-administrators` (not all Domain Admins).
 - Credential test API rejects unauthenticated UMC sessions.
 
 ## References
