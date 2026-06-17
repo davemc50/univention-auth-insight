@@ -1,0 +1,24 @@
+Source: univention-management-console-module-authin
+Section: univention
+Priority: optional
+Maintainer: Ecotegral <it@ecotegral.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-python,
+ gettext,
+ python3-all,
+ python3-ldap,
+ univention-management-console-dev (>= 12.0.2),
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: univention-management-console-module-authin
+Architecture: all
+Depends:
+ python3-ldap,
+ univention-management-console-server (>= 11.0.4-37),
+ ${misc:Depends},
+ ${python3:Depends},
+Description: Auth Insight UMC module
+ Per-user authentication log viewer and admin credential test panel
+ for Univention Management Console (Auth Insight / authin).

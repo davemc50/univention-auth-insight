@@ -1,0 +1,5 @@
+# Auth Insight Python translations (stub)
+# SPDX-License-Identifier: AGPL-3.0-only
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"

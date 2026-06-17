@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.deb
+*.changes
+*.buildinfo
+*.ddeb
+umc/de.mo
+umc/python/de.mo
+debian/.debhelper/
+debian/*.debhelper
+debian/*.debhelper.log
+debian/debhelper-build-stamp
+debian/files
+debian/*.debhelper.log
+debian/*.substvars
+debian/univention-management-console-module-authin/

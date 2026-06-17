@@ -1,0 +1,6 @@
+2026-06-16T12:15:23.684719+12:00 beach python3 /usr/sbin/univention-management-console-server: pam_sss(univention-management-console:auth): received for user gustavo.moraga@thinkstep-anz.com: 10 (User not known to the underlying authentication module)
+2026-06-16T12:15:30.584178+12:00 beach python3 /usr/sbin/univention-management-console-server: pam_sss(univention-management-console:auth): received for user gustavo.moraga@thinkstep-anz.com: 10 (User not known to the underlying authentication module)
+2026-06-16T12:15:25.480739+12:00    ERROR [         -] PAM: authentication error: ('Authentication failure', 7)	| pid=405158 logname=AUTH func=pam.authenticate:211 umcmodule=server
+time="2026-06-16T12:15:01+12:00" level=error msg="Unsuccessful 1FA authentication attempt by user 'gustavom'" error="authentication failed. Cause: error occurred performing bind: LDAP Result Code 49 \"Invalid Credentials\": " method=POST path=/api/firstfactor remote_ip=10.64.30.136
+time="2026-06-16T12:14:48+12:00" level=error msg="Error occurred getting details for user with username input 'gustavo.moraga@thinkstep-anz.com' which usually indicates they do not exist" error="user not found" method=POST path=/api/firstfactor remote_ip=10.64.30.136
+2026-06-16T09:56:02.213374+12:00 beach sudo: pam_sss(sudo-i:auth): received for user davidmc: 7 (Authentication failure)

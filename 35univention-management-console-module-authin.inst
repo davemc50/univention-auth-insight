@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Auth Insight UMC module join script
+# SPDX-License-Identifier: AGPL-3.0-only
+
+## joinscript api: bindpwdfile
+
+VERSION=2
+
+. /usr/share/univention-join/joinscripthelper.lib
+. /usr/share/univention-lib/umc.sh
+
+joinscript_init
+
+umc_init
+umc_operation_create "authin-all" "Auth Insight" "" "authin/*"
+
+# Dedicated policy for the built-in Administrators group (not all of Domain Admins).
+umc_udm policies/umc create --ignore_exists \
+	--set name=authin-administrators \
+	--position "cn=UMC,cn=policies,$ldap_base" || exit $?
+umc_policy_append "authin-administrators" "authin-all"
+
+administrators_group_dn="$(umc_udm groups/group list --filter name='Administrators' | sed -ne 's/^DN: //p')"
+if [ -n "$administrators_group_dn" ]; then
+	umc_udm groups/group modify --ignore_exists --dn "$administrators_group_dn" \
+		--policy-reference="cn=authin-administrators,cn=UMC,cn=policies,$ldap_base" || exit $?
+else
+	echo "WARNING: Administrators group not found; authin UMC policy not linked." >&2
+fi
+
+# Remove from default-umc-all if a previous install added it there.
+umc_udm policies/umc modify --ignore_exists \
+	--dn "cn=default-umc-all,cn=UMC,cn=policies,$ldap_base" \
+	--remove allow="cn=authin-all,cn=operations,cn=UMC,cn=univention,$ldap_base" 2>/dev/null || true
+
+joinscript_save_current_version
+
+exit 0

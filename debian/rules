@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: AGPL-3.0-only
+
+%:
+	dh $@ --with python3,umc
+
+override_dh_auto_build:
+	msgfmt -o umc/de.mo umc/po/de.po
+	msgfmt -o umc/python/de.mo umc/python/po/de.po
+
+override_dh_clean:
+	rm -f umc/de.mo umc/python/de.mo
+	dh_clean

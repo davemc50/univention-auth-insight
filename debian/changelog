@@ -1,0 +1,16 @@
+univention-management-console-module-authin (0.1.1-1) unstable; urgency=medium
+
+  * Fix UMC command routing (explicit umc/store for authin/query).
+  * Move module to Users category; yellow/white icon.
+  * Restrict UMC access to Administrators group policy.
+  * Compact UI: tab pages, no duplicate page headers, grid status text.
+  * Credential test: LDAP + Kerberos (kinit); broader log correlation.
+  * Document Authelia syslog forwarding.
+
+ -- Ecotegral <it@ecotegral.com>  Wed, 18 Jun 2026 10:15:00 +1200
+
+univention-management-console-module-authin (0.1.0-1) unstable; urgency=medium
+
+  * Initial Auth Insight UMC module (log search, LDAP suggestions, credential test).
+
+ -- Ecotegral <it@ecotegral.com>  Tue, 17 Jun 2026 15:50:00 +1200
