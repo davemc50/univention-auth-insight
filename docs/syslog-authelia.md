@@ -1,38 +1,39 @@
-# Forward Authelia auth logs to beach (syslog)
+# Forward Authelia auth logs via syslog
 
-Authelia on **douglas** writes structured login failures to container logs.
-Auth Insight on **beach** reads local files. Forward Authelia events via syslog
-so the UMC module stays responsive (no SSH/docker exec from beach).
+Authelia docker containers write structured login failures to stdout. Auth
+Insight on a UCS host can read them either by:
 
-## Recommended layout
+1. **SSH docker logs** — see [remote-docker-logs.md](remote-docker-logs.md)
+2. **Syslog forward** — one-way push to a local file (below)
+
+## Recommended layout (syslog)
 
 ```text
-douglas (Authelia docker) → rsyslog → beach:/var/log/authelia/auth.log
-                                      → authin via UCR authin/logs/extra
+docker host (Authelia) → rsyslog → UCS host:/var/log/authelia/auth.log
+                                 → authin via UCR authin/logs/extra
 ```
 
-## douglas — Authelia → syslog
+## Source host — Authelia → syslog
 
 1. Configure Authelia file or stdout logging (default docker logs is fine).
 2. Add **promtail**, **fluent-bit**, or **rsyslog** imfile on the docker log path, **or**
    set Authelia `log_file_path` to a host-mounted volume.
 
-Example **rsyslog** forwarder on douglas (`/etc/rsyslog.d/authelia-forward.conf`):
+Example **rsyslog** forwarder on the docker host (`/etc/rsyslog.d/authelia-forward.conf`):
 
 ```rsyslog
-# Authelia container logs tagged by docker logging driver, or file:
 input(type="imfile"
       File="/var/lib/docker/containers/*/*-json.log"
       Tag="authelia"
       readMode="2")
 
-if $programname == 'authelia' then @@beach.in.ecotegral.com:514
+if $programname == 'authelia' then @@ucs-primary.example.com:514
 & stop
 ```
 
 Use a dedicated tag/filter so only Authelia lines are forwarded.
 
-## beach — receive and store
+## UCS host — receive and store
 
 `/etc/rsyslog.d/authelia-remote.conf`:
 
@@ -40,13 +41,13 @@ Use a dedicated tag/filter so only Authelia lines are forwarded.
 module(load="imudp")
 input(type="imudp" port="514")
 
-if $fromhost-ip == '10.64.30.11' and $programname == 'authelia' then {
+if $fromhost-ip == '10.0.0.11' and $programname == 'authelia' then {
     action(type="omfile" file="/var/log/authelia/auth.log")
     stop
 }
 ```
 
-Adjust douglas IP and path. Restrict UDP/TCP 514 to douglas only on the firewall.
+Adjust source IP and path. Restrict UDP/TCP 514 to trusted forwarders only.
 
 Register with Auth Insight:
 
@@ -57,17 +58,17 @@ systemctl restart rsyslog
 
 ## Verify
 
-On douglas, trigger a failed login. On beach:
+Trigger a failed login on the SSO portal. On the UCS host:
 
 ```bash
 tail -f /var/log/authelia/auth.log
-grep -i gustavom /var/log/authelia/auth.log
+grep -i username /var/log/authelia/auth.log
 ```
 
 Then search **Auth Insight** in UMC for the same user.
 
 ## Security
 
-- Syslog forward is **one-way** (douglas → beach).
+- Syslog forward is **one-way** (docker host → UCS).
 - Lines contain usernames and source IPs, not passwords.
 - Restrict rsyslog source IPs; do not expose 514 to the internet.

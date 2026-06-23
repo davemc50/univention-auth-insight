@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <!--
-SPDX-FileCopyrightText: 2026 Ecotegral
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <umc version="2.0">
-	<module id="authin" icon="authin" priority="45" version="1.0">
+	<module id="authin" icon="authin" priority="45" version="0.1.11">
 		<name>Auth Insight</name>
 		<description>Per-user authentication logs and admin credential testing</description>
 		<keywords>auth,login,ldap,pam,audit,password</keywords>

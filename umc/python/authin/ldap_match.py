@@ -45,13 +45,32 @@ def _similarity(needle: str, haystack: str) -> float:
     return difflib.SequenceMatcher(None, needle, haystack).ratio()
 
 
+def _get_prop(props, name, default=""):
+    value = getattr(props, name, None)
+    if value not in (None, ""):
+        return value
+    info = getattr(props, "info", None)
+    if isinstance(info, dict) and name in info:
+        value = info.get(name)
+        if value not in (None, ""):
+            return value
+    if hasattr(props, "__getitem__"):
+        try:
+            value = props[name]
+            if value not in (None, ""):
+                return value
+        except (KeyError, TypeError):
+            pass
+    return default
+
+
 def _collect_aliases(props) -> tuple:
     aliases = []
-    primary = str(getattr(props, "mailPrimaryAddress", "") or "")
+    primary = str(_get_prop(props, "mailPrimaryAddress", "") or "")
     if primary:
         aliases.append(primary)
     for key in ("e-mail", "mailAlternativeAddress"):
-        raw = getattr(props, key, None)
+        raw = _get_prop(props, key, None)
         if not raw:
             continue
         if isinstance(raw, (list, tuple)):
@@ -62,14 +81,14 @@ def _collect_aliases(props) -> tuple:
 
 
 def score_user(props, dn: str, needle: str) -> Optional[UserCandidate]:
-    username = str(getattr(props, "username", "") or "")
+    username = str(_get_prop(props, "username", "") or "")
     if not username:
         return None
 
     aliases = _collect_aliases(props)
     fields = {
         "username": username,
-        "mail_primary": str(getattr(props, "mailPrimaryAddress", "") or ""),
+        "mail_primary": str(_get_prop(props, "mailPrimaryAddress", "") or ""),
     }
     for alias in aliases:
         fields.setdefault("mail_alias", alias)
@@ -90,11 +109,11 @@ def score_user(props, dn: str, needle: str) -> Optional[UserCandidate]:
     if best_score < 0.45:
         return None
 
-    disabled = str(getattr(props, "disabled", "0")) in ("1", "True", "true")
+    disabled = str(_get_prop(props, "disabled", "0")) in ("1", "True", "true")
     return UserCandidate(
         username=username,
         dn=dn,
-        mail_primary=str(getattr(props, "mailPrimaryAddress", "") or ""),
+        mail_primary=str(_get_prop(props, "mailPrimaryAddress", "") or ""),
         mail_aliases=aliases,
         disabled=disabled,
         score=round(best_score, 3),
@@ -140,8 +159,8 @@ def resolve_username(
 
     best: Optional[UserCandidate] = None
     for dn, props in lookup_users():
-        username = str(getattr(props, "username", "") or "")
-        primary = str(getattr(props, "mailPrimaryAddress", "") or "").lower()
+        username = str(_get_prop(props, "username", "") or "")
+        primary = str(_get_prop(props, "mailPrimaryAddress", "") or "").lower()
         aliases = [value.lower() for value in _collect_aliases(props)]
         identity_lower = identity.lower()
         if identity_lower in ({username.lower(), primary} | set(aliases)):

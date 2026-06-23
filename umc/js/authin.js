@@ -1,5 +1,4 @@
 /*
- * SPDX-FileCopyrightText: 2026 Ecotegral
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 /*global define*/
@@ -8,10 +7,10 @@ define([
 	"dojo/_base/declare",
 	"dojo/_base/lang",
 	"dojo/_base/array",
-	"dojo/store/Memory",
+	"dojo/Deferred",
+	"dojo/Evented",
 	"umc/dialog",
 	"umc/tools",
-	"umc/store",
 	"umc/widgets/Module",
 	"umc/widgets/Page",
 	"umc/widgets/Grid",
@@ -21,7 +20,26 @@ define([
 	"umc/widgets/PasswordBox",
 	"umc/widgets/TitlePane",
 	"umc/i18n!umc/modules/authin"
-], function(declare, lang, array, Memory, dialog, tools, store, Module, Page, Grid, SearchForm, Form, TextBox, PasswordBox, TitlePane, _) {
+], function(declare, lang, array, Deferred, Evented, dialog, tools, Module, Page, Grid, SearchForm, Form, TextBox, PasswordBox, TitlePane, _) {
+	var MODULE_DEBUG_VERSION = "0.1.11";
+
+	function authinCommand(tools, command, data) {
+		return tools.umcpCommand(command, data, true, null, null, {
+			url: "/univention/command/authin/" + command
+		});
+	}
+
+	// UMC Grid auto-filters on load for plain Memory stores, which toggles a
+	// full-page standby overlay. A no-op umcp store skips that initial filter.
+	var EmptyGridStore = declare([Evented], {
+		idProperty: "id",
+		umcpCommand: function() {
+			var deferred = new Deferred();
+			deferred.resolve({ result: [] });
+			return deferred;
+		}
+	});
+
 	return declare("umc.modules.authin", [ Module ], {
 
 		idProperty: "id",
@@ -33,7 +51,7 @@ define([
 
 		postMixInProperties: function() {
 			this.inherited(arguments);
-			this._logStore = store(this.idProperty, "authin/query");
+			this.subTitle = _("Module debug version %s", MODULE_DEBUG_VERSION);
 		},
 
 		buildRendering: function() {
@@ -41,21 +59,19 @@ define([
 
 			this._logPage = new Page({
 				title: _("Authentication logs"),
-				helpText: _("Search PAM, LDAP, Kerberos, Samba, and related auth logs. Enter a username, e-mail fragment, or pattern."),
+				helpText: _("Search PAM, LDAP, Kerberos, Samba, Authelia, and related auth logs. Enter a username, e-mail fragment, or pattern."),
 				fullWidth: true
 			});
 			this.addChild(this._logPage);
 			this.selectChild(this._logPage);
 
+			this._logStore = new EmptyGridStore();
+
 			this._logGrid = new Grid({
 				region: "main",
 				moduleStore: this._logStore,
+				initialStatusMessage: _("Authentication logs — enter a search term or press Search."),
 				noDataMessage: _("Authentication logs — no matching entries."),
-				query: {
-					pattern: "",
-					hours: 48,
-					limit: 200
-				},
 				columns: [{
 					name: "timestamp",
 					label: _("Time"),
@@ -99,9 +115,24 @@ define([
 				}],
 				layout: [["pattern", "hours"]],
 				onSearch: lang.hitch(this, function(values) {
-					var query = lang.mixin({}, this._logGrid.query, values);
+					var query = lang.mixin({
+						pattern: "",
+						hours: 48,
+						limit: 200
+					}, values);
 					query.hours = parseInt(query.hours, 10) || 48;
-					this._logGrid.filter(query);
+					this.standbyDuring(authinCommand(tools, "query", query)).then(
+						lang.hitch(this, function(response) {
+							var payload = response.result || {};
+							var rows = payload.events || (array.isArray(payload) ? payload : []);
+							this._logGrid.collection.setData(rows);
+							this._logGrid._grid.refresh();
+							this._showRemoteStatus(payload.remote_status || []);
+						}),
+						lang.hitch(this, function(err) {
+							dialog.alert(tools.parseError(err));
+						})
+					);
 					this._loadSuggestions(values.pattern);
 				})
 			});
@@ -113,8 +144,16 @@ define([
 				content: ""
 			});
 
+			this._remoteStatusPane = new TitlePane({
+				title: _("Remote log sources"),
+				region: "main",
+				open: false,
+				content: ""
+			});
+
 			this._logPage.addChild(this._logSearch);
 			this._logPage.addChild(this._logGrid);
+			this._logPage.addChild(this._remoteStatusPane);
 			this._logPage.addChild(this._suggestPane);
 
 			this._testPage = new Page({
@@ -152,8 +191,18 @@ define([
 				content: "<div class=\"authinTestResult\"></div>"
 			});
 
+			this._testPage.addChild(this._testForm);
+			this._testPage.addChild(this._testResultPane);
+		},
+
+		_ensureTestLogGrid: function() {
+			if (this._testLogGrid) {
+				return;
+			}
+			this._testLogStore = new EmptyGridStore();
 			this._testLogGrid = new Grid({
 				region: "main",
+				moduleStore: this._testLogStore,
 				noDataMessage: _("No recent log lines for this identity."),
 				columns: [{
 					name: "timestamp",
@@ -177,18 +226,35 @@ define([
 					width: "auto"
 				}]
 			});
+			this._testPage.addChild(this._testLogGrid);
+		},
 
-			this._testPage.addChild(this._testForm);
-			this._testPage.addChild(this._testResultPane);
-			this._testPage.addChild(new TitlePane({
-				title: _("Matching log lines"),
-				region: "main",
-				content: this._testLogGrid
-			}));
+		selectChild: function(page, animate) {
+			if (page === this._testPage) {
+				this._ensureTestLogGrid();
+			}
+			return this.inherited(arguments);
+		},
 
-			this._logPage.startup();
-			this._testPage.startup();
-			this._logGrid.filter(this._logGrid.query);
+		_showRemoteStatus: function(statuses) {
+			if (!statuses || !statuses.length) {
+				this._remoteStatusPane.set("open", false);
+				return;
+			}
+			var html = "<ul>";
+			array.forEach(statuses, function(item) {
+				var label = item.label || item.host_id || item.host;
+				if (item.status === "ok") {
+					html += "<li><strong>" + label + "</strong> — " + _("available") +
+						" (" + item.line_count + " " + _("lines fetched") + ")</li>";
+				} else {
+					html += "<li><strong>" + label + "</strong> — " + _("unavailable") +
+						": " + (item.message || _("could not connect")) + "</li>";
+				}
+			});
+			html += "</ul>";
+			this._remoteStatusPane.set("content", html);
+			this._remoteStatusPane.set("open", true);
 		},
 
 		_loadSuggestions: function(pattern) {
@@ -196,7 +262,7 @@ define([
 				this._suggestPane.set("open", false);
 				return;
 			}
-			tools.umcpCommand("authin/suggest", { pattern: pattern, limit: 8 }).then(
+			authinCommand(tools, "suggest", { pattern: pattern, limit: 8 }).then(
 				lang.hitch(this, function(response) {
 					var rows = response.result || [];
 					var html;
@@ -220,8 +286,9 @@ define([
 		},
 
 		_runCredentialTest: function() {
+			this._ensureTestLogGrid();
 			var values = this._testForm.get("value");
-			this.standbyDuring(tools.umcpCommand("authin/test_credentials", values)).then(
+			this.standbyDuring(authinCommand(tools, "test_credentials", values)).then(
 				lang.hitch(this, function(response) {
 					var result = response.result || {};
 					var html = "<ul>" +
@@ -232,10 +299,8 @@ define([
 						"<li><strong>" + _("Kerberos principal") + ":</strong> " + (result.krb5_principal || "-") + "</li>" +
 						"</ul>";
 					this._testResultPane.set("content", html);
-					this._testLogGrid.set("store", new Memory({
-						data: result.log_hits || [],
-						idProperty: "id"
-					}));
+					this._testLogGrid.collection.setData(result.log_hits || []);
+					this._testLogGrid._grid.refresh();
 					this._testForm.getWidget("password").set("value", "");
 				}),
 				lang.hitch(this, function(err) {

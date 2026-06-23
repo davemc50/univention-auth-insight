@@ -15,6 +15,7 @@ Rules-Requires-Root: no
 Package: univention-management-console-module-authin
 Architecture: all
 Depends:
+ openssh-client,
  python3-ldap,
  univention-management-console-server (>= 11.0.4-37),
  ${misc:Depends},

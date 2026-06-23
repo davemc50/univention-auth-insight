@@ -14,3 +14,8 @@ debian/files
 debian/*.debhelper.log
 debian/*.substvars
 debian/univention-management-console-module-authin/
+.env
+.env.e2e
+tests/e2e/node_modules/
+tests/e2e/artifacts/
+tests/e2e/test-results/

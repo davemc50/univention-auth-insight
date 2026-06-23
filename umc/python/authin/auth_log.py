@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Iterable, Iterator, List, Optional, Sequence
 
 
-# syslog: 2026-06-16T12:15:23.684719+12:00 beach ...
+# syslog: 2026-06-16T12:15:23.684719+12:00 host ...
 _SYSLOG_TS = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?)"
 )
@@ -66,6 +66,18 @@ class AuthEvent:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class SearchResult:
+    events: List[dict]
+    remote_status: List[dict]
+
+    def to_dict(self) -> dict:
+        return {
+            "events": self.events,
+            "remote_status": self.remote_status,
+        }
 
 
 def _parse_timestamp(raw: str) -> Optional[datetime]:
@@ -276,31 +288,52 @@ def search(
     limit: int = 200,
     log_paths: Sequence[str],
     max_lines_per_file: int = 5000,
+    remote_sources: Optional[Sequence] = None,
+    max_lines_per_remote: int = 5000,
     now: Optional[datetime] = None,
-) -> List[dict]:
+) -> SearchResult:
     pattern_lower = (pattern or "").strip().lower()
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=max(1, hours))
 
     events: List[AuthEvent] = []
+    remote_status: List[dict] = []
+
+    def _collect_line(line: str, source: str) -> None:
+        event = parse_line(line, source=source)
+        if event is None:
+            return
+        if pattern_lower:
+            haystack = " ".join(
+                (event.identity, event.summary, event.service, event.raw, event.classification)
+            ).lower()
+            if pattern_lower not in haystack:
+                return
+        event_time = _parse_timestamp(event.timestamp)
+        if event_time and event_time < cutoff:
+            return
+        events.append(event)
+
     for path in iter_log_files(log_paths):
         for line in _read_tail(path, max_lines_per_file):
-            event = parse_line(line, source=path)
-            if event is None:
-                continue
-            if pattern_lower:
-                haystack = " ".join(
-                    (event.identity, event.summary, event.service, event.raw, event.classification)
-                ).lower()
-                if pattern_lower not in haystack:
-                    continue
-            event_time = _parse_timestamp(event.timestamp)
-            if event_time and event_time < cutoff:
-                continue
-            events.append(event)
+            _collect_line(line, path)
+
+    if remote_sources:
+        from . import remote_log
+
+        remote_lines, statuses = remote_log.fetch_remote_logs(
+            remote_sources,
+            max_lines_per_container=max_lines_per_remote,
+        )
+        remote_status = [status.to_dict() for status in statuses]
+        for line, source in remote_lines:
+            _collect_line(line, source)
 
     events.sort(key=lambda item: item.timestamp, reverse=True)
-    return [event.to_dict() for event in events[: max(1, limit)]]
+    return SearchResult(
+        events=[event.to_dict() for event in events[: max(1, limit)]],
+        remote_status=remote_status,
+    )
 
 
 def default_log_paths_from_ucr(get_ucr) -> List[str]:

@@ -7,17 +7,21 @@ testing** on Univention Corporate Server.
 |---|---|
 | Module ID | `authin` |
 | Debian package | `univention-management-console-module-authin` |
-| Category | Users (UMC tile group) |
+| Category | Users |
 | License | AGPL-3.0-only |
 
 ## Documentation
 
 - [Product scope and roadmap](docs/SCOPE.md)
+- [Remote docker SSO logs](docs/remote-docker-logs.md)
+
+Site-specific deployment (host names, SSH users) belongs in `.env` — see
+`.env.example`. Internal runbooks: ops wiki **Auth Insight** page.
 
 ## Quick start (development install on UCS)
 
 ```bash
-cd /root/internal/authin
+cd authin
 ./scripts/lint.sh
 ./scripts/test.sh
 sudo ./scripts/install.sh
@@ -58,5 +62,5 @@ authin/
 
 ## Status
 
-**MVP in progress** — log parsing, LDAP suggestions, and credential test panel
-implemented; App Center packaging and multi-node aggregation not yet done.
+**MVP** — log parsing, LDAP suggestions, credential test, remote Authelia docker
+logs with graceful offline handling. App Center packaging in progress.
