@@ -1,9 +1,9 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: univention-management-console-module-authin
-Source: https://git.in.ecotegral.com/internal/authin
+Source: https://github.com/davemc50/univention-auth-insight
 
 Files: *
-Copyright: 2026 Ecotegral
+Copyright: 2026 Dave McDonald and Auth Insight contributors
 License: AGPL-3.0-only
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU Affero General Public License as published by

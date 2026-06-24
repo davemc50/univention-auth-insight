@@ -32,4 +32,4 @@ run_join_script
 echo "==> Restarting UMC server"
 systemctl restart univention-management-console-server
 
-echo "Installed Auth Insight. Open UMC → System → Auth Insight."
+echo "Installed Auth Insight. Open UMC → Users → Auth Insight."

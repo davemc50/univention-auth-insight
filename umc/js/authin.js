@@ -7,7 +7,8 @@ define([
 	"dojo/_base/declare",
 	"dojo/_base/lang",
 	"dojo/_base/array",
-	"dojo/Deferred",
+	"dojo/dom-class",
+	"dojo/dom-style",
 	"dojo/Evented",
 	"umc/dialog",
 	"umc/tools",
@@ -19,9 +20,27 @@ define([
 	"umc/widgets/TextBox",
 	"umc/widgets/PasswordBox",
 	"umc/widgets/TitlePane",
-	"umc/i18n!umc/modules/authin"
-], function(declare, lang, array, Deferred, Evented, dialog, tools, Module, Page, Grid, SearchForm, Form, TextBox, PasswordBox, TitlePane, _) {
-	var MODULE_DEBUG_VERSION = "0.1.11";
+	"umc/widgets/ContainerWidget",
+	"umc/widgets/Icon",
+	"umc/widgets/Tooltip",
+	"umc/i18n!umc/modules/authin",
+	"xstyle/css!./authin.css"
+], function(declare, lang, array, domClass, style, Evented, dialog, tools, Module, Page, Grid, SearchForm, Form, TextBox, PasswordBox, TitlePane, ContainerWidget, Icon, Tooltip, _) {
+	var MODULE_DEBUG_VERSION = "0.1.18";
+
+	var LOG_SEARCH_HELP = _(
+		"Search PAM, LDAP, Kerberos, Samba, Authelia, and related auth logs. " +
+		"Enter a username, e-mail fragment, or pattern. Use * (or leave empty) for all entries."
+	);
+	var CREDENTIAL_TEST_HELP = _(
+		"Test domain credentials (LDAP + Kerberos) and show matching log lines. " +
+		"Passwords are never stored or logged."
+	);
+
+	var GRID_HEADER_HEIGHT = 40;
+	var GRID_ROW_HEIGHT = 34;
+	var GRID_MIN_VISIBLE_ROWS = 4;
+	var GRID_MAX_VISIBLE_ROWS = 16;
 
 	function authinCommand(tools, command, data) {
 		return tools.umcpCommand(command, data, true, null, null, {
@@ -29,16 +48,137 @@ define([
 		});
 	}
 
-	// UMC Grid auto-filters on load for plain Memory stores, which toggles a
-	// full-page standby overlay. A no-op umcp store skips that initial filter.
-	var EmptyGridStore = declare([Evented], {
+	// UMC Grid reads results via dojo/store query(), not filter(). Data is
+	// already filtered server-side; ignore client query properties (pattern/hours).
+	var ResultGridStore = declare([Evented], {
 		idProperty: "id",
-		umcpCommand: function() {
-			var deferred = new Deferred();
-			deferred.resolve({ result: [] });
-			return deferred;
+		_rows: [],
+		setRows: function(rows) {
+			this._rows = rows || [];
+		},
+		getIdentity: function(object) {
+			return object[this.idProperty];
+		},
+		query: function() {
+			return this._rows;
 		}
 	});
+
+	function extractQueryRows(response) {
+		var payload = response && response.result !== undefined ? response.result : response;
+		if (Array.isArray(payload)) {
+			return payload;
+		}
+		if (payload && Array.isArray(payload.events)) {
+			return payload.events;
+		}
+		return [];
+	}
+
+	function extractRemoteStatus(response) {
+		var payload = response && response.result !== undefined ? response.result : response;
+		if (payload && Array.isArray(payload.remote_status)) {
+			return payload.remote_status;
+		}
+		return [];
+	}
+
+	function resizeAuthinGrid(grid, rowCount) {
+		if (!grid || !grid._grid || !grid._grid.bodyNode) {
+			return;
+		}
+		var rows = rowCount > 0 ? rowCount : GRID_MIN_VISIBLE_ROWS;
+		var visibleRows = Math.min(Math.max(rows, GRID_MIN_VISIBLE_ROWS), GRID_MAX_VISIBLE_ROWS);
+		var heightPx = GRID_HEADER_HEIGHT + visibleRows * GRID_ROW_HEIGHT;
+		style.set(grid._grid.bodyNode, "maxHeight", heightPx + "px");
+	}
+
+	function updateResultGrid(grid, store, rows) {
+		store.setRows(rows);
+		// Use empty query: log rows lack pattern/hours fields; server already filtered.
+		return grid.filter({}).then(function() {
+			resizeAuthinGrid(grid, rows.length);
+			if (grid.onFilterDone) {
+				grid.onFilterDone(true);
+			}
+		});
+	}
+
+	function addHelpIcon(owner, helpText) {
+		var icon = new Icon({
+			iconName: "help-circle",
+			"class": "authinHelpIcon"
+		});
+		owner.own(icon);
+		owner.own(new Tooltip({
+			label: helpText,
+			connectId: [icon.domNode],
+			position: ["below", "above"]
+		}));
+		return icon;
+	}
+
+	function logGridColumns(includeSource) {
+		var columns = [{
+			name: "timestamp",
+			label: _("Time"),
+			width: "170px"
+		}, {
+			name: "identity",
+			label: _("Identity"),
+			width: "180px"
+		}, {
+			name: "client",
+			label: _("Client"),
+			width: "130px"
+		}, {
+			name: "classification",
+			label: _("Result"),
+			width: "140px"
+		}, {
+			name: "service",
+			label: _("Service"),
+			width: "120px"
+		}, {
+			name: "summary",
+			label: _("Summary"),
+			width: "auto"
+		}];
+		if (includeSource) {
+			columns.push({
+				name: "source",
+				label: _("Source"),
+				width: "200px"
+			});
+		}
+		return columns;
+	}
+
+	function logGridActions(module) {
+		return [{
+			name: "openUser",
+			label: _("Open user"),
+			description: _("Open this identity in Users (LDAP)"),
+			iconClass: "user",
+			isStandardAction: true,
+			isContextAction: true,
+			isMultiAction: false,
+			callback: lang.hitch(module, "_openUserInUdm")
+		}];
+	}
+
+	function createLogGrid(props) {
+		return new Grid(lang.mixin({
+			"class": "authinLogGrid",
+			gridOptions: {
+				selectionMode: "single"
+			},
+			defaultAction: "openUser",
+			defaultActionColumn: "identity",
+			columns: logGridColumns(props.includeSource !== false),
+			actions: logGridActions(props.module)
+		}, props));
+	}
 
 	return declare("umc.modules.authin", [ Module ], {
 
@@ -56,62 +196,45 @@ define([
 
 		buildRendering: function() {
 			this.inherited(arguments);
+			domClass.add(this.domNode, "umc-authin");
 
 			this._logPage = new Page({
 				title: _("Authentication logs"),
-				helpText: _("Search PAM, LDAP, Kerberos, Samba, Authelia, and related auth logs. Enter a username, e-mail fragment, or pattern."),
-				fullWidth: true
+				fullWidth: true,
+				navContentClass: "authinLogNav"
 			});
 			this.addChild(this._logPage);
 			this.selectChild(this._logPage);
 
-			this._logStore = new EmptyGridStore();
+			this._logStore = new ResultGridStore();
 
-			this._logGrid = new Grid({
+			this._logGrid = createLogGrid({
 				region: "main",
+				module: this,
 				moduleStore: this._logStore,
+				includeSource: true,
 				initialStatusMessage: _("Authentication logs — enter a search term or press Search."),
-				noDataMessage: _("Authentication logs — no matching entries."),
-				columns: [{
-					name: "timestamp",
-					label: _("Time"),
-					width: "170px"
-				}, {
-					name: "identity",
-					label: _("Identity"),
-					width: "180px"
-				}, {
-					name: "classification",
-					label: _("Result"),
-					width: "140px"
-				}, {
-					name: "service",
-					label: _("Service"),
-					width: "120px"
-				}, {
-					name: "summary",
-					label: _("Summary"),
-					width: "auto"
-				}, {
-					name: "source",
-					label: _("Source"),
-					width: "200px"
-				}]
+				noDataMessage: _("Authentication logs — no matching entries.")
 			});
 
 			this._logSearch = new SearchForm({
-				region: "nav",
 				hideSubmitButton: false,
+				"class": "authinSearchForm",
 				widgets: [{
 					type: TextBox,
 					name: "pattern",
 					label: _("Search"),
-					value: ""
+					value: "",
+					placeHolder: _("* = all"),
+					size: "TwoThirds",
+					"class": "umcTextBoxOnBody"
 				}, {
 					type: TextBox,
 					name: "hours",
 					label: _("Hours"),
-					value: "48"
+					value: "48",
+					size: "TwoThirds",
+					"class": "umcTextBoxOnBody"
 				}],
 				layout: [["pattern", "hours"]],
 				onSearch: lang.hitch(this, function(values) {
@@ -120,46 +243,43 @@ define([
 						hours: 48,
 						limit: 200
 					}, values);
-					query.hours = parseInt(query.hours, 10) || 48;
-					this.standbyDuring(authinCommand(tools, "query", query)).then(
-						lang.hitch(this, function(response) {
-							var payload = response.result || {};
-							var rows = payload.events || (array.isArray(payload) ? payload : []);
-							this._logGrid.collection.setData(rows);
-							this._logGrid._grid.refresh();
-							this._showRemoteStatus(payload.remote_status || []);
-						}),
-						lang.hitch(this, function(err) {
-							dialog.alert(tools.parseError(err));
-						})
-					);
+					this._runLogSearch(query);
 					this._loadSuggestions(values.pattern);
 				})
 			});
+
+			this._logSearchNav = new ContainerWidget({
+				region: "nav",
+				"class": "authinSearchNavRow"
+			});
+			this._logSearchNav.addChild(this._logSearch);
+			this._logSearchNav.addChild(addHelpIcon(this, LOG_SEARCH_HELP));
 
 			this._suggestPane = new TitlePane({
 				title: _("LDAP near matches"),
 				region: "main",
 				open: false,
-				content: ""
+				content: "",
+				"class": "authinAuxPane"
 			});
 
 			this._remoteStatusPane = new TitlePane({
 				title: _("Remote log sources"),
 				region: "main",
 				open: false,
-				content: ""
+				content: "",
+				"class": "authinAuxPane"
 			});
 
-			this._logPage.addChild(this._logSearch);
+			this._logPage.addChild(this._logSearchNav);
 			this._logPage.addChild(this._logGrid);
-			this._logPage.addChild(this._remoteStatusPane);
 			this._logPage.addChild(this._suggestPane);
+			this._logPage.addChild(this._remoteStatusPane);
 
 			this._testPage = new Page({
 				title: _("Credential test"),
-				helpText: _("Test domain credentials (LDAP + Kerberos) and show matching log lines. Passwords are never stored or logged."),
-				fullWidth: true
+				fullWidth: true,
+				mainContentClass: "authinTestPage"
 			});
 			this.addChild(this._testPage);
 
@@ -184,6 +304,12 @@ define([
 				}]
 			});
 
+			this._testNav = new ContainerWidget({
+				region: "nav",
+				"class": "authinSearchNavRow"
+			});
+			this._testNav.addChild(addHelpIcon(this, CREDENTIAL_TEST_HELP));
+
 			this._testResultPane = new TitlePane({
 				title: _("Test result"),
 				region: "main",
@@ -191,6 +317,7 @@ define([
 				content: "<div class=\"authinTestResult\"></div>"
 			});
 
+			this._testPage.addChild(this._testNav);
 			this._testPage.addChild(this._testForm);
 			this._testPage.addChild(this._testResultPane);
 		},
@@ -199,32 +326,13 @@ define([
 			if (this._testLogGrid) {
 				return;
 			}
-			this._testLogStore = new EmptyGridStore();
-			this._testLogGrid = new Grid({
+			this._testLogStore = new ResultGridStore();
+			this._testLogGrid = createLogGrid({
 				region: "main",
+				module: this,
 				moduleStore: this._testLogStore,
-				noDataMessage: _("No recent log lines for this identity."),
-				columns: [{
-					name: "timestamp",
-					label: _("Time"),
-					width: "170px"
-				}, {
-					name: "identity",
-					label: _("Identity"),
-					width: "160px"
-				}, {
-					name: "classification",
-					label: _("Result"),
-					width: "140px"
-				}, {
-					name: "service",
-					label: _("Service"),
-					width: "100px"
-				}, {
-					name: "summary",
-					label: _("Summary"),
-					width: "auto"
-				}]
+				includeSource: false,
+				noDataMessage: _("No recent log lines for this identity.")
 			});
 			this._testPage.addChild(this._testLogGrid);
 		},
@@ -234,6 +342,49 @@ define([
 				this._ensureTestLogGrid();
 			}
 			return this.inherited(arguments);
+		},
+
+		_openUserInUdm: function(ids, items) {
+			var item = items && items[0];
+			var identity = item && item.identity;
+			if (!identity || identity === "(unknown)") {
+				dialog.alert(_("No user identity on this log line."));
+				return;
+			}
+			var finished = authinCommand(tools, "resolve", { identity: identity }).then(
+				lang.hitch(this, function(response) {
+					var user = response.result;
+					if (!user || !user.dn) {
+						dialog.alert(_("No domain user matches \"%s\".", identity));
+						return;
+					}
+					require(["umc/app"], function(app) {
+						app.openModule("udm", "users/user", {
+							openObject: {
+								objectType: "users/user",
+								objectDN: user.dn
+							}
+						});
+					});
+				})
+			);
+			return this.standbyDuring(finished).then(null, lang.hitch(this, function(err) {
+				dialog.alert(tools.parseError(err));
+			}));
+		},
+
+		_runLogSearch: function(query) {
+			query.hours = parseInt(query.hours, 10) || 48;
+			query.limit = query.limit || 200;
+			var finished = authinCommand(tools, "query", query).then(lang.hitch(this, function(response) {
+				var rows = extractQueryRows(response);
+				return updateResultGrid(this._logGrid, this._logStore, rows).then(lang.hitch(this, function() {
+					this._showRemoteStatus(extractRemoteStatus(response));
+				}));
+			}));
+			return this.standbyDuring(finished).then(null, lang.hitch(this, function(err) {
+				dialog.alert(tools.parseError(err));
+			}));
 		},
 
 		_showRemoteStatus: function(statuses) {
@@ -258,7 +409,7 @@ define([
 		},
 
 		_loadSuggestions: function(pattern) {
-			if (!pattern || pattern.length < 2) {
+			if (!pattern || pattern.length < 2 || pattern === "*") {
 				this._suggestPane.set("open", false);
 				return;
 			}
@@ -288,25 +439,23 @@ define([
 		_runCredentialTest: function() {
 			this._ensureTestLogGrid();
 			var values = this._testForm.get("value");
-			this.standbyDuring(authinCommand(tools, "test_credentials", values)).then(
-				lang.hitch(this, function(response) {
-					var result = response.result || {};
-					var html = "<ul>" +
-						"<li><strong>" + _("Summary") + ":</strong> " + (result.summary || "") + "</li>" +
-						"<li><strong>" + _("LDAP") + ":</strong> " + (result.ldap_classification || "-") + "</li>" +
-						"<li><strong>" + _("Kerberos") + ":</strong> " + (result.krb5_classification || "-") + "</li>" +
-						"<li><strong>" + _("Username") + ":</strong> " + (result.username || "-") + "</li>" +
-						"<li><strong>" + _("Kerberos principal") + ":</strong> " + (result.krb5_principal || "-") + "</li>" +
-						"</ul>";
-					this._testResultPane.set("content", html);
-					this._testLogGrid.collection.setData(result.log_hits || []);
-					this._testLogGrid._grid.refresh();
+			var finished = authinCommand(tools, "test_credentials", values).then(lang.hitch(this, function(response) {
+				var result = response.result || {};
+				var html = "<ul>" +
+					"<li><strong>" + _("Summary") + ":</strong> " + (result.summary || "") + "</li>" +
+					"<li><strong>" + _("LDAP") + ":</strong> " + (result.ldap_classification || "-") + "</li>" +
+					"<li><strong>" + _("Kerberos") + ":</strong> " + (result.krb5_classification || "-") + "</li>" +
+					"<li><strong>" + _("Username") + ":</strong> " + (result.username || "-") + "</li>" +
+					"<li><strong>" + _("Kerberos principal") + ":</strong> " + (result.krb5_principal || "-") + "</li>" +
+					"</ul>";
+				this._testResultPane.set("content", html);
+				return updateResultGrid(this._testLogGrid, this._testLogStore, result.log_hits || []).then(lang.hitch(this, function() {
 					this._testForm.getWidget("password").set("value", "");
-				}),
-				lang.hitch(this, function(err) {
-					dialog.alert(tools.parseError(err));
-				})
-			);
+				}));
+			}));
+			this.standbyDuring(finished).then(null, lang.hitch(this, function(err) {
+				dialog.alert(tools.parseError(err));
+			}));
 		}
 	});
 });

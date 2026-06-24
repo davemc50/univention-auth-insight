@@ -1,70 +1,115 @@
+univention-management-console-module-authin (0.1.18-1) unstable; urgency=medium
+
+  * Client column: origin IP from Authelia, SSH, PAM rhost when logged.
+  * Open user action (click identity or toolbar); hide unused row checkboxes.
+
+ -- Auth Insight <authin@example.com>  Wed, 24 Jun 2026 16:15:00 +1200
+
+univention-management-console-module-authin (0.1.17-1) unstable; urgency=medium
+
+  * Search pattern * (or empty) returns all auth log entries in the time window.
+
+ -- Auth Insight <authin@example.com>  Wed, 24 Jun 2026 16:00:00 +1200
+
+univention-management-console-module-authin (0.1.16-1) unstable; urgency=medium
+
+  * Compact UI: inline search labels, help tooltips, header version on title row.
+  * Log grid grows with row count (no scroll for a few results).
+
+ -- Auth Insight <authin@example.com>  Wed, 24 Jun 2026 15:00:00 +1200
+
+univention-management-console-module-authin (0.1.15-1) unstable; urgency=medium
+
+  * Fix search results: use Array.isArray (dojo array has no isArray).
+
+ -- Auth Insight <authin@example.com>  Wed, 24 Jun 2026 14:35:00 +1200
+
+univention-management-console-module-authin (0.1.14-1) unstable; urgency=medium
+
+  * Fix search: chain grid.filter into standbyDuring so results render reliably.
+
+ -- Auth Insight <authin@example.com>  Wed, 24 Jun 2026 14:30:00 +1200
+
+univention-management-console-module-authin (0.1.13-1) unstable; urgency=medium
+
+  * Fix log grid: use dojo/store query() and filter({}) so rows are not dropped.
+
+ -- Auth Insight <authin@example.com>  Wed, 24 Jun 2026 14:20:00 +1200
+
+univention-management-console-module-authin (0.1.12-1) unstable; urgency=medium
+
+  * Fix log grid clearing results after search (_grid.refresh re-filtered empty store).
+  * Move remote log sources below LDAP near matches; LDAP min score 0.6.
+
+ -- Auth Insight <authin@example.com>  Wed, 24 Jun 2026 14:10:00 +1200
+
 univention-management-console-module-authin (0.1.11-1) unstable; urgency=medium
 
   * Multi-host remote docker logs (JSON UCR authin/remote/hosts).
   * Graceful unavailable status when SSH/docker hosts are offline.
   * Help text mentions Authelia; site names moved to .env only.
-  * scripts/setup-remote-logs.sh replaces setup-douglas-remote.sh.
+  * scripts/setup-remote-logs.sh for multi-host remote log configuration.
 
  -- Auth Insight <authin@example.com>  Tue, 24 Jun 2026 11:00:00 +1200
 
 univention-management-console-module-authin (0.1.10-1) unstable; urgency=medium
 
-  * SSH to douglas for Authelia docker logs (auth-remote / remote-auth SSO).
-  * Add scripts/setup-douglas-remote.sh and docs/douglas-remote-logs.md.
+  * SSH to remote hosts for Authelia docker logs (SSO reverse proxy).
+  * Add remote docker log fetch script and documentation.
 
- -- Ecotegral <it@ecotegral.com>  Tue, 24 Jun 2026 10:00:00 +1200
+ -- Auth Insight <authin@example.com>  Tue, 24 Jun 2026 10:00:00 +1200
 
 univention-management-console-module-authin (0.1.9-1) unstable; urgency=medium
 
   * Fix LDAP near-match suggest: read username from UDM lookup .info dict.
 
- -- Ecotegral <it@ecotegral.com>  Thu, 18 Jun 2026 23:15:00 +1200
+ -- Auth Insight <authin@example.com>  Thu, 18 Jun 2026 23:15:00 +1200
 
 univention-management-console-module-authin (0.1.8-1) unstable; urgency=medium
 
   * Fix black screen on module open: skip UMC Grid auto-filter standby overlay.
   * Defer credential-test log grid until that tab is opened.
 
- -- Ecotegral <it@ecotegral.com>  Thu, 18 Jun 2026 22:45:00 +1200
+ -- Auth Insight <authin@example.com>  Thu, 18 Jun 2026 22:45:00 +1200
 
 univention-management-console-module-authin (0.1.7-1) unstable; urgency=medium
 
   * Work around UMC umcpCommand treating authin/* as /univention/authin/* (404).
 
- -- Ecotegral <it@ecotegral.com>  Thu, 18 Jun 2026 22:30:00 +1200
+ -- Auth Insight <authin@example.com>  Thu, 18 Jun 2026 22:30:00 +1200
 
 univention-management-console-module-authin (0.1.6-1) unstable; urgency=medium
 
   * Log search uses tools.umcpCommand("authin/query") instead of umc/store grid path.
 
- -- Ecotegral <it@ecotegral.com>  Thu, 18 Jun 2026 22:15:00 +1200
+ -- Auth Insight <authin@example.com>  Thu, 18 Jun 2026 22:15:00 +1200
 
 univention-management-console-module-authin (0.1.5-1) unstable; urgency=medium
 
   * Fix module load crash: credential-test Grid now has a Memory moduleStore.
   * Fix TitlePane wrapping for matching log lines grid.
 
- -- Ecotegral <it@ecotegral.com>  Thu, 18 Jun 2026 22:00:00 +1200
+ -- Auth Insight <authin@example.com>  Thu, 18 Jun 2026 22:00:00 +1200
 
 univention-management-console-module-authin (0.1.4-1) unstable; urgency=medium
 
   * Do not pass initial Grid query (UMC Grid auto-filters on load).
   * Playwright e2e: module-load test, network capture, .env.e2e support.
 
- -- Ecotegral <it@ecotegral.com>  Thu, 18 Jun 2026 20:30:00 +1200
+ -- Auth Insight <authin@example.com>  Thu, 18 Jun 2026 20:30:00 +1200
 
 univention-management-console-module-authin (0.1.3-1) unstable; urgency=medium
 
   * Show module debug version on the main page subtitle (0.1.3).
   * Bind log grid store to authin (not authin/query) and skip auto-search on open.
 
- -- Ecotegral <it@ecotegral.com>  Thu, 18 Jun 2026 20:00:00 +1200
+ -- Auth Insight <authin@example.com>  Thu, 18 Jun 2026 20:00:00 +1200
 
 univention-management-console-module-authin (0.1.2-1) unstable; urgency=medium
 
   * Fix log search calling authin/query/query (404 unknown request).
 
- -- Ecotegral <it@ecotegral.com>  Wed, 18 Jun 2026 10:50:00 +1200
+ -- Auth Insight <authin@example.com>  Wed, 18 Jun 2026 10:50:00 +1200
 
 univention-management-console-module-authin (0.1.1-1) unstable; urgency=medium
 
@@ -75,10 +120,10 @@ univention-management-console-module-authin (0.1.1-1) unstable; urgency=medium
   * Credential test: LDAP + Kerberos (kinit); broader log correlation.
   * Document Authelia syslog forwarding.
 
- -- Ecotegral <it@ecotegral.com>  Wed, 18 Jun 2026 10:15:00 +1200
+ -- Auth Insight <authin@example.com>  Wed, 18 Jun 2026 10:15:00 +1200
 
 univention-management-console-module-authin (0.1.0-1) unstable; urgency=medium
 
   * Initial Auth Insight UMC module (log search, LDAP suggestions, credential test).
 
- -- Ecotegral <it@ecotegral.com>  Tue, 17 Jun 2026 15:50:00 +1200
+ -- Auth Insight <authin@example.com>  Tue, 17 Jun 2026 15:50:00 +1200

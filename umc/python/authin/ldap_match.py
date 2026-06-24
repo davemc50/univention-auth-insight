@@ -80,6 +80,9 @@ def _collect_aliases(props) -> tuple:
     return tuple(dict.fromkeys(aliases))
 
 
+MIN_SUGGEST_SCORE = 0.6
+
+
 def score_user(props, dn: str, needle: str) -> Optional[UserCandidate]:
     username = str(_get_prop(props, "username", "") or "")
     if not username:
@@ -106,7 +109,7 @@ def score_user(props, dn: str, needle: str) -> Optional[UserCandidate]:
                 best_score = score
                 matched_on = field_name
 
-    if best_score < 0.45:
+    if best_score < MIN_SUGGEST_SCORE:
         return None
 
     disabled = str(_get_prop(props, "disabled", "0")) in ("1", "True", "true")
@@ -138,7 +141,11 @@ def suggest_users(
             candidates.append(scored)
 
     candidates.sort(key=lambda item: (-item.score, item.username))
-    return [item.to_dict() for item in candidates[: max(1, limit)]]
+    return [
+        item.to_dict()
+        for item in candidates[: max(1, limit)]
+        if item.score >= MIN_SUGGEST_SCORE
+    ]
 
 
 def resolve_username(

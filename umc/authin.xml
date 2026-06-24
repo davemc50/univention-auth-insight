@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <umc version="2.0">
-	<module id="authin" icon="authin" priority="45" version="0.1.11">
+	<module id="authin" icon="authin" priority="45" version="0.1.18">
 		<name>Auth Insight</name>
 		<description>Per-user authentication logs and admin credential testing</description>
 		<keywords>auth,login,ldap,pam,audit,password</keywords>
@@ -14,6 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</categories>
 		<command name="authin/query" function="query" />
 		<command name="authin/suggest" function="suggest" />
+		<command name="authin/resolve" function="resolve" />
 		<command name="authin/test_credentials" function="test_credentials" />
 		<command name="authin/sources" function="sources" />
 	</module>

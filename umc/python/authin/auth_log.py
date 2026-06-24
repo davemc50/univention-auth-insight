@@ -38,6 +38,14 @@ _AUTHELIA_NOT_FOUND = re.compile(
 )
 _LDAP_CODE = re.compile(r"LDAP Result Code (?P<code>\d+)\s+\"(?P<msg>[^\"]+)\"")
 _AUTHELIA_TS = re.compile(r'time="(?P<ts>[^"]+)"')
+_CLIENT_PATTERNS = (
+    re.compile(r"remote_ip=(?P<client>[^\s\"']+)"),
+    re.compile(r"\bfrom (?P<client>\d{1,3}(?:\.\d{1,3}){3}) port \d+"),
+    re.compile(r"\brhost=(?P<client>[^\s]+)"),
+    re.compile(r"\bclient=(?P<client>[^\s,;]+)"),
+    re.compile(r"\bremote (?:(?:addr|address))=(?P<client>[^\s]+)"),
+    re.compile(r"\bx-forwarded-for[=:]\s*(?P<client>[^\s,;]+)", re.IGNORECASE),
+)
 
 _PAM_CODE_LABELS = {
     "7": "invalid_credentials",
@@ -63,6 +71,7 @@ class AuthEvent:
     source: str
     raw: str
     code: str = ""
+    client: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -147,6 +156,17 @@ def _extract_identity(line: str) -> str:
     return ""
 
 
+def _extract_client(line: str) -> str:
+    for pattern in _CLIENT_PATTERNS:
+        match = pattern.search(line)
+        if not match:
+            continue
+        client = (match.group("client") or "").strip().strip("\"'")
+        if client and client not in ("", "-", "?", "unknown", "0.0.0.0"):
+            return client
+    return ""
+
+
 def parse_line(line: str, source: str = "") -> Optional[AuthEvent]:
     line = line.rstrip("\n")
     if not line.strip():
@@ -168,6 +188,9 @@ def parse_line(line: str, source: str = "") -> Optional[AuthEvent]:
             "kerberos",
             "preauthentication",
             "ldap result code",
+            "failed password",
+            "accepted publickey",
+            "authentication failure",
         )
     ):
         return None
@@ -186,6 +209,7 @@ def parse_line(line: str, source: str = "") -> Optional[AuthEvent]:
         return None
 
     identity = _extract_identity(line)
+    client = _extract_client(line)
     service = _extract_service(line)
     classification = "auth_failure"
     summary = "Authentication event"
@@ -225,6 +249,20 @@ def parse_line(line: str, source: str = "") -> Optional[AuthEvent]:
         classification = "success"
         summary = "Session opened"
 
+    if "accepted publickey for" in lowered or "accepted password for" in lowered:
+        classification = "success"
+        summary = "SSH login accepted"
+        ssh_user = re.search(r"for (?P<user>[^\s]+) from ", line)
+        if ssh_user:
+            identity = ssh_user.group("user").strip()
+
+    if "failed password for" in lowered:
+        classification = "invalid_credentials"
+        summary = "SSH password failed"
+        ssh_user = re.search(r"for (?P<user>[^\s]+) from ", line)
+        if ssh_user:
+            identity = ssh_user.group("user").strip()
+
     if not identity and classification == "auth_failure" and not code:
         return None
     if not identity:
@@ -242,6 +280,7 @@ def parse_line(line: str, source: str = "") -> Optional[AuthEvent]:
         source=source,
         raw=raw,
         code=code,
+        client=client,
     )
 
 
@@ -281,6 +320,11 @@ def _read_tail(path: str, max_lines: int) -> List[str]:
         return []
 
 
+def pattern_matches_all(pattern: str) -> bool:
+    """True when the search should return all auth events (no identity/text filter)."""
+    return not (pattern or "").strip() or (pattern or "").strip() == "*"
+
+
 def search(
     pattern: str = "",
     *,
@@ -292,7 +336,8 @@ def search(
     max_lines_per_remote: int = 5000,
     now: Optional[datetime] = None,
 ) -> SearchResult:
-    pattern_lower = (pattern or "").strip().lower()
+    match_all = pattern_matches_all(pattern)
+    pattern_lower = "" if match_all else (pattern or "").strip().lower()
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=max(1, hours))
 
@@ -305,7 +350,14 @@ def search(
             return
         if pattern_lower:
             haystack = " ".join(
-                (event.identity, event.summary, event.service, event.raw, event.classification)
+                (
+                    event.identity,
+                    event.summary,
+                    event.service,
+                    event.raw,
+                    event.classification,
+                    event.client,
+                )
             ).lower()
             if pattern_lower not in haystack:
                 return

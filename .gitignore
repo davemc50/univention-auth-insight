@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 *.deb
+!dist/*.deb
 *.changes
 *.buildinfo
 *.ddeb

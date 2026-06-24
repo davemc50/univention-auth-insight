@@ -39,6 +39,24 @@ class AuthLogTests(unittest.TestCase):
         self.assertEqual(event.identity, "user007")
         self.assertEqual(event.classification, "invalid_credentials")
 
+    def test_parse_authelia_client_ip(self):
+        line = (
+            'time="2026-06-16T12:15:01+12:00" level=error msg="Unsuccessful 1FA authentication attempt by user \'user007\'" '
+            'error="authentication failed" method=POST path=/api/firstfactor remote_ip=10.0.0.136'
+        )
+        event = auth_log.parse_line(line, source="authelia.log")
+        self.assertIsNotNone(event)
+        self.assertEqual(event.client, "10.0.0.136")
+
+    def test_parse_sshd_client_ip(self):
+        line = (
+            "2026-06-24T09:47:25.626224+12:00 ucs-primary sshd[2827434]: "
+            "Accepted publickey for user007 from 10.64.1.32 port 59958 ssh2: RSA SHA256:abc"
+        )
+        event = auth_log.parse_line(line, source="/var/log/auth.log")
+        self.assertIsNotNone(event)
+        self.assertEqual(event.client, "10.64.1.32")
+
     def test_search_fixture_file(self):
         now = datetime(2026, 6, 17, 12, 0, tzinfo=timezone.utc)
         result = auth_log.search(
@@ -53,6 +71,41 @@ class AuthLogTests(unittest.TestCase):
         self.assertIn("user_not_found", classes)
         self.assertIn("invalid_credentials", classes)
         self.assertEqual(result.remote_status, [])
+
+    def test_search_star_pattern_matches_all(self):
+        now = datetime(2026, 6, 17, 12, 0, tzinfo=timezone.utc)
+        paths = ["tests/fixtures/sample_auth.log"]
+        all_events = auth_log.search(
+            "*",
+            hours=240,
+            limit=50,
+            log_paths=paths,
+            now=now,
+        )
+        filtered = auth_log.search(
+            "user007",
+            hours=240,
+            limit=50,
+            log_paths=paths,
+            now=now,
+        )
+        self.assertGreater(len(all_events.events), len(filtered.events))
+        empty = auth_log.search(
+            "",
+            hours=240,
+            limit=50,
+            log_paths=paths,
+            now=now,
+        )
+        self.assertEqual(len(all_events.events), len(empty.events))
+
+    def test_pattern_matches_all(self):
+        self.assertTrue(auth_log.pattern_matches_all(""))
+        self.assertTrue(auth_log.pattern_matches_all("  "))
+        self.assertTrue(auth_log.pattern_matches_all("*"))
+        self.assertTrue(auth_log.pattern_matches_all(" * "))
+        self.assertFalse(auth_log.pattern_matches_all("user007"))
+        self.assertFalse(auth_log.pattern_matches_all("*user*"))
 
     @mock.patch("authin.remote_log.fetch_remote_logs")
     def test_search_reports_unavailable_remote(self, mock_fetch):

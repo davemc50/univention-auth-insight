@@ -84,6 +84,14 @@ class Instance(Base):
 
     @sanitize(
         identity=StringSanitizer(required=True, minimum=1),
+    )
+    @simple_response
+    def resolve(self, identity):
+        user = ldap_match.resolve_username(identity, lookup_users=self._lookup_users)
+        return user.to_dict() if user else None
+
+    @sanitize(
+        identity=StringSanitizer(required=True, minimum=1),
         password=StringSanitizer(required=True, minimum=1),
     )
     @simple_response

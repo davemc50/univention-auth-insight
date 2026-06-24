@@ -1,0 +1,111 @@
+/* Auth Insight — compact layout overrides */
+
+.umc-authin .umcModuleHeaderLeft {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.umc-authin .umcModuleTitleWrapper {
+	flex: 0 1 auto;
+}
+
+.umc-authin .umcModuleSubTitle {
+	margin-left: auto;
+	padding-left: 1rem;
+	font-size: var(--font-size-4);
+	color: var(--font-color-contrast-middle);
+	white-space: nowrap;
+}
+
+.umc-authin .authinSearchNavRow {
+	display: flex;
+	flex-direction: row;
+	align-items: flex-end;
+	gap: 0.5rem;
+}
+
+.umc-authin .authinSearchNavRow .umcSearchForm {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.umc-authin .authinSearchNavRow .authinHelpIcon {
+	flex: 0 0 auto;
+	margin-bottom: 0.35rem;
+	cursor: help;
+	color: var(--font-color-contrast-middle);
+}
+
+.umc-authin .authinSearchNavRow .authinHelpIcon:hover {
+	color: var(--font-color-contrast-high);
+}
+
+.umc-authin .authinSearchForm .umcLayoutRow {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	margin-bottom: 0;
+}
+
+.umc-authin .authinSearchForm .umcLayoutRow .umcLabelPane {
+	display: inline-flex;
+	flex-direction: row;
+	align-items: center;
+	padding-bottom: 0;
+}
+
+.umc-authin .authinSearchForm .umcLabelPaneLabelNodeTop {
+	display: inline-flex !important;
+	margin: 0 0.5rem 0 0;
+	white-space: nowrap;
+}
+
+.umc-authin .authinSearchForm .umcLabelPaneContainerNode {
+	flex: 1 1 auto;
+	min-width: 8rem;
+}
+
+.umc-authin .authinSearchForm .umcSize-TwoThirds {
+	width: auto;
+	flex: 1 1 14rem;
+	max-width: 22rem;
+}
+
+.umc-authin .authinLogGrid.umcGrid {
+	flex: 0 1 auto;
+	min-height: 0;
+}
+
+.umc-authin .authinLogGrid .dgrid {
+	max-height: none !important;
+	height: auto !important;
+	flex: 0 1 auto !important;
+}
+
+.umc-authin .authinLogGrid .dgrid .dgrid-scroller {
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.umc-authin .authinLogGrid .dgrid-selector,
+.umc-authin .authinLogGrid .dgrid-header .dgrid-selector {
+	display: none !important;
+}
+
+.umc-authin .authinLogGrid .dgrid-row {
+	cursor: pointer;
+}
+
+.umc-authin .authinLogGrid .authinIdentityLink {
+	color: var(--font-color-link, #0066cc);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.umc-authin .authinAuxPane .dijitTitlePaneContentInner {
+	max-height: none;
+	overflow: visible;
+}

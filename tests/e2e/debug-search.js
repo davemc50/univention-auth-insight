@@ -56,8 +56,8 @@ const ARTIFACT_DIR = path.join(__dirname, 'artifacts');
     const tabs = require('umc/app')._tabContainer.getChildren();
     const authin = tabs.find((t) => t.moduleID === 'authin');
     if (!authin || !authin._logSearch) throw new Error('authin search form not found');
-    authin._logSearch.set('value', { pattern: 'gustavo', hours: '48' });
-    authin._logSearch.onSearch({ pattern: 'gustavo', hours: '48' });
+    authin._logSearch.set('value', { pattern: 'user007', hours: '48' });
+    authin._logSearch.onSearch({ pattern: 'user007', hours: '48' });
   });
   await page.waitForTimeout(8000);
 

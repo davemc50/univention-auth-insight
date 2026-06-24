@@ -199,7 +199,7 @@ test('Auth Insight search does not show unknown request error', async ({ page })
     if (!authin || !authin._logSearch) {
       throw new Error('authin search form not found');
     }
-    authin._logSearch.onSearch({ pattern: 'gustavo', hours: '48' });
+    authin._logSearch.onSearch({ pattern: 'user007', hours: '48' });
   });
 
   await page.waitForTimeout(5000);
