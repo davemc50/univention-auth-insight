@@ -43,11 +43,13 @@ while IFS= read -r -d '' file; do
     grep -Ein "$FORBIDDEN" "$file" >&2 || true
     status=1
   fi
-done < <(find umc tests scripts docs etc -type f \
+done < <(find . -type f \
   \( -name '*.py' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.cfg' -o -name '*.xml' -o -name '*.json' -o -name '*.log' \) \
+  ! -path './.git/*' \
   ! -path '*/node_modules/*' \
   ! -path '*/e2e/artifacts/*' \
   ! -path '*/e2e/test-results/*' \
+  ! -path './debian/univention-management-console-module-authin/*' \
   -print0 2>/dev/null)
 
 exit "$status"
