@@ -26,11 +26,11 @@ define([
 	"umc/i18n!umc/modules/authin",
 	"xstyle/css!./authin.css"
 ], function(declare, lang, array, domClass, style, Evented, dialog, tools, Module, Page, Grid, SearchForm, Form, TextBox, PasswordBox, TitlePane, ContainerWidget, Icon, Tooltip, _) {
-	var MODULE_DEBUG_VERSION = "0.1.18";
+	var MODULE_DEBUG_VERSION = "0.1.22";
 
 	var LOG_SEARCH_HELP = _(
 		"Search PAM, LDAP, Kerberos, Samba, Authelia, and related auth logs. " +
-		"Enter a username, e-mail fragment, or pattern. Use * (or leave empty) for all entries."
+		"Enter a username or fragment (mart), a wildcard (mart* / *admin*), or * for all entries."
 	);
 	var CREDENTIAL_TEST_HELP = _(
 		"Test domain credentials (LDAP + Kerberos) and show matching log lines. " +
@@ -196,6 +196,8 @@ define([
 
 		buildRendering: function() {
 			this.inherited(arguments);
+			// Set again after header exists; also survives stale in-memory modules less often.
+			this.set("subTitle", _("Module debug version %s", MODULE_DEBUG_VERSION));
 			domClass.add(this.domNode, "umc-authin");
 
 			this._logPage = new Page({
@@ -213,8 +215,8 @@ define([
 				module: this,
 				moduleStore: this._logStore,
 				includeSource: true,
-				initialStatusMessage: _("Authentication logs — enter a search term or press Search."),
-				noDataMessage: _("Authentication logs — no matching entries.")
+				initialStatusMessage: _("Authentication logs (v%s) — enter a search term or press Search.", MODULE_DEBUG_VERSION),
+				noDataMessage: _("Authentication logs (v%s) — no matching entries.", MODULE_DEBUG_VERSION)
 			});
 
 			this._logSearch = new SearchForm({
@@ -225,7 +227,7 @@ define([
 					name: "pattern",
 					label: _("Search"),
 					value: "",
-					placeHolder: _("* = all"),
+					placeHolder: _("mart* or * = all"),
 					size: "TwoThirds",
 					"class": "umcTextBoxOnBody"
 				}, {

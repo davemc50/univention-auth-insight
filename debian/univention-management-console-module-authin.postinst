@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+set -e
+
+if [ "$1" = "configure" ]; then
+	. /usr/share/univention-lib/join.sh &&
+		call_joinscript 35univention-management-console-module-authin.inst ||
+		:
+
+	if command -v a2enconf >/dev/null 2>&1; then
+		a2enconf zzz-authin-nocache >/dev/null 2>&1 || true
+		deb-systemd-invoke reload apache2 >/dev/null 2>&1 || true
+	fi
+fi
+
+deb-systemd-invoke reload univention-management-console-server >/dev/null 2>&1 || true
+
+# Touch packaged frontend assets and bump umc/web/cache_bust (mtime/ETag).
+. /usr/share/univention-lib/umc.sh
+umc_frontend_new_hash
+
+# UCS sets umc/web/cache_bust but does not put it into dojoConfig; without that,
+# browsers keep the previous authin.js for the page session / HTTP max-age window.
+AUTHIN_INJECT="/usr/share/univention-management-console-module-authin/inject-dojo-cachebust.sh"
+if [ -x "$AUTHIN_INJECT" ]; then
+	"$AUTHIN_INJECT" || true
+fi
+
+#DEBHELPER#

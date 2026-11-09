@@ -17,7 +17,7 @@ echo "==> Building Debian package"
 dpkg-buildpackage -us -uc -b
 DEB="$(find .. -maxdepth 1 -name 'univention-management-console-module-authin_*.deb' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
 echo "==> Installing $DEB"
-dpkg -i "$DEB"
+DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -i "$DEB"
 
 echo "==> Running join script"
 run_join_script() {

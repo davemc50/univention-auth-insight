@@ -12,7 +12,7 @@
 
 ## Features
 
-- Search authentication events by username, e-mail fragment, free text, or `*` (all entries)
+- Search authentication events by username, e-mail fragment, wildcards (`mart*`), or `*` (all entries)
 - Time window filter (default 48 hours; increase for older events)
 - Parses local logs: `auth.log`, UMC server log, Samba (when present)
 - Optional remote **Authelia** / SSO docker logs over SSH (multi-host)
@@ -39,7 +39,7 @@ sudo univention-run-join-scripts --run-scripts 35univention-management-console-m
 sudo systemctl restart univention-management-console-server
 ```
 
-Open UMC in the browser, hard-refresh if upgrading (`Ctrl+Shift+R`), then go to **Users → Auth Insight**.
+Open UMC in the browser, then go to **Users → Auth Insight**. After upgrading, do a full page reload of UMC (the package sets Dojo `cacheBust` and disables long-lived cache for the module JS).
 
 If `dpkg` reports missing dependencies:
 

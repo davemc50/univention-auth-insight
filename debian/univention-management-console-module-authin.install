@@ -1,0 +1,2 @@
+etc/apache2/conf-available/zzz-authin-nocache.conf
+scripts/inject-dojo-cachebust.sh usr/share/univention-management-console-module-authin/

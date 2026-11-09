@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import glob
 import os
 import re
@@ -19,13 +20,21 @@ _SYSLOG_TS = re.compile(
 _UMC_TS = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?)"
 )
+# Samba debug header: [2026/11/10 10:04:48.793652,  3, pid=...]
+_SAMBA_TS = re.compile(
+    r"^\[(?P<ts>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)"
+)
 
 _PAM_USER = re.compile(r"\buser=(?P<user>[^\s]+)")
+_PAM_USER_AUTHED = re.compile(
+    r"\buser (?P<user>\S+) authenticated(?: as (?P<principal>\S+))?"
+)
 _PAM_LOGNAME = re.compile(r"logname=(?P<user>[^\s]+)")
 _PAM_CODE = re.compile(
     r"received for user (?P<user>[^:]+):\s*(?P<code>\d+)\s*\((?P<msg>[^)]+)\)"
 )
 _UNIX_CHKPWD = re.compile(r"password check failed for user \((?P<user>[^)]+)\)")
+_SESSION_OPENED = re.compile(r"session opened for user (?P<user>[^\s(]+)")
 _PAM_SERVICE = re.compile(r"pam_\w+\((?P<service>[^:)]+)")
 _UMC_PAM_ERR = re.compile(
     r"PAM: authentication error: \('(?P<msg>[^']+)',\s*(?P<code>\d+)\)"
@@ -38,6 +47,20 @@ _AUTHELIA_NOT_FOUND = re.compile(
 )
 _LDAP_CODE = re.compile(r"LDAP Result Code (?P<code>\d+)\s+\"(?P<msg>[^\"]+)\"")
 _AUTHELIA_TS = re.compile(r'time="(?P<ts>[^"]+)"')
+_KRB_PREAUTH_OK = re.compile(
+    r"Pre-authentication succeeded -- (?P<user>\S+)", re.IGNORECASE
+)
+_KRB_PREAUTH_FAIL = re.compile(
+    r"Pre-authentication failed(?: for)?(?: --)? (?P<user>\S+)", re.IGNORECASE
+)
+_KRB_AS_OK = re.compile(
+    r"AS-REQ SUCCESS\s+(?:ipv4:(?P<client>[\d.]+):\d+\s+)?(?P<user>\S+@\S+)",
+    re.IGNORECASE,
+)
+_KRB_AS_FAIL = re.compile(
+    r"AS-REQ (?P<code>ERR_\w+)\s+(?:ipv4:(?P<client>[\d.]+):\d+\s+)?(?P<user>\S+@\S+)",
+    re.IGNORECASE,
+)
 _CLIENT_PATTERNS = (
     re.compile(r"remote_ip=(?P<client>[^\s\"']+)"),
     re.compile(r"\bfrom (?P<client>\d{1,3}(?:\.\d{1,3}){3}) port \d+"),
@@ -45,6 +68,32 @@ _CLIENT_PATTERNS = (
     re.compile(r"\bclient=(?P<client>[^\s,;]+)"),
     re.compile(r"\bremote (?:(?:addr|address))=(?P<client>[^\s]+)"),
     re.compile(r"\bx-forwarded-for[=:]\s*(?P<client>[^\s,;]+)", re.IGNORECASE),
+    re.compile(r"\bipv4:(?P<client>\d{1,3}(?:\.\d{1,3}){3}):\d+"),
+)
+
+# Meaningful auth keywords. Keep noise (Looking for…, ERR_PREAUTH_REQUIRED) out.
+_AUTH_TOKENS = (
+    "authentication",
+    "auth):",
+    "pam:",
+    "invalid credentials",
+    "password check failed",
+    "user not known",
+    "authelia",
+    "krb5",
+    "kinit",
+    "kerberos",
+    "pre-authentication",
+    "preauthentication",
+    "as-req success",
+    "as-req err_",
+    "ldap result code",
+    "failed password",
+    "accepted publickey",
+    "accepted password",
+    "authentication failure",
+    "session opened for user",
+    "authenticated",
 )
 
 _PAM_CODE_LABELS = {
@@ -89,17 +138,24 @@ class SearchResult:
         }
 
 
+def _local_tz():
+    return datetime.now().astimezone().tzinfo or timezone.utc
+
+
 def _parse_timestamp(raw: str) -> Optional[datetime]:
     raw = raw.strip()
     for fmt in (
         "%Y-%m-%dT%H:%M:%S.%f%z",
         "%Y-%m-%dT%H:%M:%S%z",
         "%Y-%m-%dT%H:%M:%S",
+        "%Y/%m/%d %H:%M:%S.%f",
+        "%Y/%m/%d %H:%M:%S",
     ):
         try:
             dt = datetime.strptime(raw.replace("Z", "+00:00"), fmt)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                # Samba debug timestamps are local wall-clock, not UTC.
+                dt = dt.replace(tzinfo=_local_tz())
             return dt
         except ValueError:
             continue
@@ -147,12 +203,29 @@ def _extract_service(line: str) -> str:
 
 
 def _extract_identity(line: str) -> str:
-    for pattern in (_PAM_CODE, _PAM_USER, _PAM_LOGNAME, _UNIX_CHKPWD, _AUTHELIA_USER, _AUTHELIA_NOT_FOUND):
+    for pattern in (
+        _PAM_CODE,
+        _PAM_USER_AUTHED,
+        _SESSION_OPENED,
+        _KRB_AS_OK,
+        _KRB_PREAUTH_OK,
+        _KRB_PREAUTH_FAIL,
+        _PAM_USER,
+        _PAM_LOGNAME,
+        _UNIX_CHKPWD,
+        _AUTHELIA_USER,
+        _AUTHELIA_NOT_FOUND,
+    ):
         match = pattern.search(line)
         if match:
-            user = match.group("user").strip()
+            user = (match.groupdict().get("user") or match.groupdict().get("principal") or "").strip()
             if user and user not in ("", "uid=0"):
                 return user
+    as_fail = _KRB_AS_FAIL.search(line)
+    if as_fail:
+        user = (as_fail.group("user") or "").strip()
+        if user:
+            return user
     return ""
 
 
@@ -167,32 +240,21 @@ def _extract_client(line: str) -> str:
     return ""
 
 
-def parse_line(line: str, source: str = "") -> Optional[AuthEvent]:
+def parse_line(line: str, source: str = "", fallback_ts: str = "") -> Optional[AuthEvent]:
     line = line.rstrip("\n")
     if not line.strip():
         return None
 
+    # Samba header lines only carry the timestamp for the following message.
+    if _SAMBA_TS.match(line):
+        return None
+
     lowered = line.lower()
-    if not any(
-        token in lowered
-        for token in (
-            "authentication",
-            "auth):",
-            "pam:",
-            "invalid credentials",
-            "password check failed",
-            "user not known",
-            "authelia",
-            "krb5",
-            "kinit",
-            "kerberos",
-            "preauthentication",
-            "ldap result code",
-            "failed password",
-            "accepted publickey",
-            "authentication failure",
-        )
-    ):
+    if not any(token in lowered for token in _AUTH_TOKENS):
+        return None
+
+    # Normal Kerberos preauth challenge — not an auth outcome.
+    if "err_preauth_required" in lowered:
         return None
 
     ts_raw = ""
@@ -205,6 +267,8 @@ def parse_line(line: str, source: str = "") -> Optional[AuthEvent]:
             if match:
                 ts_raw = match.group("ts")
                 break
+    if not ts_raw:
+        ts_raw = (fallback_ts or "").strip()
     if not ts_raw:
         return None
 
@@ -245,9 +309,49 @@ def parse_line(line: str, source: str = "") -> Optional[AuthEvent]:
         classification = "invalid_credentials"
         summary = "Password check failed"
 
-    if "session opened for user" in lowered and "authentication failure" not in lowered:
+    pam_authed = _PAM_USER_AUTHED.search(line)
+    if pam_authed and "authentication failure" not in lowered:
+        classification = "success"
+        summary = "Kerberos authentication succeeded"
+        identity = pam_authed.group("principal") or pam_authed.group("user") or identity
+        service = service if service != "unknown" else "kerberos"
+
+    session_opened = _SESSION_OPENED.search(line)
+    if session_opened and "authentication failure" not in lowered:
         classification = "success"
         summary = "Session opened"
+        identity = session_opened.group("user").strip() or identity
+
+    krb_pre_ok = _KRB_PREAUTH_OK.search(line)
+    if krb_pre_ok:
+        classification = "success"
+        summary = "Kerberos pre-authentication succeeded"
+        identity = krb_pre_ok.group("user").strip() or identity
+        service = "kerberos"
+
+    krb_pre_fail = _KRB_PREAUTH_FAIL.search(line)
+    if krb_pre_fail:
+        classification = "invalid_credentials"
+        summary = "Kerberos pre-authentication failed"
+        identity = krb_pre_fail.group("user").strip() or identity
+        service = "kerberos"
+
+    krb_as_ok = _KRB_AS_OK.search(line)
+    if krb_as_ok:
+        classification = "success"
+        summary = "Kerberos ticket granted (AS-REQ)"
+        identity = krb_as_ok.group("user").strip() or identity
+        client = krb_as_ok.group("client") or client
+        service = "kerberos"
+
+    krb_as_fail = _KRB_AS_FAIL.search(line)
+    if krb_as_fail and "err_preauth_required" not in lowered:
+        code = krb_as_fail.group("code") or code
+        classification = "auth_failure"
+        summary = f"Kerberos AS-REQ {code}" if code else "Kerberos AS-REQ failed"
+        identity = krb_as_fail.group("user").strip() or identity
+        client = krb_as_fail.group("client") or client
+        service = "kerberos"
 
     if "accepted publickey for" in lowered or "accepted password for" in lowered:
         classification = "success"
@@ -291,10 +395,20 @@ def iter_log_files(paths: Sequence[str]) -> Iterator[str]:
         if not path:
             continue
         if os.path.isdir(path):
-            for match in sorted(glob.glob(os.path.join(path, "*.log"))):
-                if match not in seen and os.path.isfile(match):
-                    seen.add(match)
-                    yield match
+            # UCS/Samba uses log.samba / log.smbd, not *.log.
+            matches = set(glob.glob(os.path.join(path, "*.log")))
+            matches.update(glob.glob(os.path.join(path, "log.*")))
+            for match in sorted(matches):
+                base = os.path.basename(match)
+                if (
+                    match in seen
+                    or not os.path.isfile(match)
+                    or base.endswith(".gz")
+                    or base == "log."
+                ):
+                    continue
+                seen.add(match)
+                yield match
             continue
         if os.path.isfile(path) and path not in seen:
             seen.add(path)
@@ -325,6 +439,26 @@ def pattern_matches_all(pattern: str) -> bool:
     return not (pattern or "").strip() or (pattern or "").strip() == "*"
 
 
+def pattern_matches_text(haystack: str, pattern: str) -> bool:
+    """Match search text: substring normally; shell wildcards (* ?) when present.
+
+    Examples: ``mart`` substring-matches ``martinf``; ``mart*`` prefix-matches
+    ``martinf`` / ``martinf@EXAMPLE.COM``; ``*`` matches everything.
+    """
+    pattern = (pattern or "").strip().lower()
+    haystack = (haystack or "").lower()
+    if not pattern or pattern == "*":
+        return True
+    if any(ch in pattern for ch in "*?"):
+        if fnmatch.fnmatchcase(haystack, pattern):
+            return True
+        identity = haystack.split(None, 1)[0] if haystack else ""
+        if identity and fnmatch.fnmatchcase(identity, pattern):
+            return True
+        return False
+    return pattern in haystack
+
+
 def search(
     pattern: str = "",
     *,
@@ -344,8 +478,8 @@ def search(
     events: List[AuthEvent] = []
     remote_status: List[dict] = []
 
-    def _collect_line(line: str, source: str) -> None:
-        event = parse_line(line, source=source)
+    def _collect_line(line: str, source: str, fallback_ts: str = "") -> None:
+        event = parse_line(line, source=source, fallback_ts=fallback_ts)
         if event is None:
             return
         if pattern_lower:
@@ -359,7 +493,7 @@ def search(
                     event.client,
                 )
             ).lower()
-            if pattern_lower not in haystack:
+            if not pattern_matches_text(haystack, pattern_lower):
                 return
         event_time = _parse_timestamp(event.timestamp)
         if event_time and event_time < cutoff:
@@ -367,8 +501,13 @@ def search(
         events.append(event)
 
     for path in iter_log_files(log_paths):
+        last_samba_ts = ""
         for line in _read_tail(path, max_lines_per_file):
-            _collect_line(line, path)
+            samba_hdr = _SAMBA_TS.match(line)
+            if samba_hdr:
+                last_samba_ts = samba_hdr.group("ts")
+                continue
+            _collect_line(line, path, fallback_ts=last_samba_ts)
 
     if remote_sources:
         from . import remote_log

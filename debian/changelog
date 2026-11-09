@@ -1,3 +1,36 @@
+univention-management-console-module-authin (0.1.22-1) unstable; urgency=medium
+
+  * Treat * and ? in search as shell wildcards (mart* matches martinf), not
+    as a literal asterisk substring.
+
+ -- Auth Insight <authin@example.com>  Tue, 10 Nov 2026 11:35:00 +1300
+
+univention-management-console-module-authin (0.1.21-1) unstable; urgency=medium
+
+  * Inject dojoConfig.cacheBust from umc/web/cache_bust into UMC index.html so
+    browsers actually fetch new module JS after deploy (UCS sets the UCR key
+    but never wires it into Dojo on this release).
+  * Show module version in the grid status line as well as the subtitle.
+
+ -- Auth Insight <authin@example.com>  Tue, 10 Nov 2026 11:05:00 +1300
+
+univention-management-console-module-authin (0.1.20-1) unstable; urgency=medium
+
+  * Disable Apache max-age cache for Auth Insight JS/CSS so deploys show up
+    without waiting an hour or hard-refreshing.
+  * Keep module XML version in sync with MODULE_DEBUG_VERSION.
+
+ -- Auth Insight <authin@example.com>  Tue, 10 Nov 2026 10:20:00 +1300
+
+univention-management-console-module-authin (0.1.19-1) unstable; urgency=medium
+
+  * Parse successful PAM session opens and pam_krb5 "user … authenticated".
+  * Parse Samba Kerberos AS-REQ / pre-authentication outcomes with debug timestamps.
+  * Skip normal ERR_PREAUTH_REQUIRED challenges that are not real failures.
+  * Include Samba-style log.* files when authin/logs/samba points at a directory.
+
+ -- Auth Insight <authin@example.com>  Tue, 10 Nov 2026 10:15:00 +1300
+
 univention-management-console-module-authin (0.1.18-1) unstable; urgency=medium
 
   * Client column: origin IP from Authelia, SSH, PAM rhost when logged.
